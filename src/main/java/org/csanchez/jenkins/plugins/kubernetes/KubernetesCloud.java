@@ -378,8 +378,12 @@ public class KubernetesCloud extends Cloud {
                                 .submit(new ProvisioningCallback(this, t, label)), 1));
                     //copy fix from https://github.com/faraway/kubernetes-plugin/commit/364abb99ccb6defc539b90882d1854305e39d01a to new version 1.1.2
                     LOGGER.log(Level.INFO, "Provisioning one node for " + t.getDisplayName() + ", taking a nap...");
-                    Thread.sleep(30000);
-                }
+                    try {
+    			Thread.sleep(5000);                 //5000 milliseconds is five seconds.
+		    } catch(InterruptedException ex) {
+   	                Thread.currentThread().interrupt();
+		    }
+		}
                 if (r.size() > 0) {
                     // Already found a matching template
                     return r;
