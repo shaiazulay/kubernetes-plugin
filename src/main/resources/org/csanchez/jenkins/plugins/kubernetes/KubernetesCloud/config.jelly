@@ -21,6 +21,10 @@
       <f:textbox/>
     </f:entry>
 
+    <f:entry title="${%Pods limit resource quota name}" field="podsLimitResourceName">
+       <f:textbox/>
+    </f:entry>
+
     <f:entry title="${%Credentials}" field="credentialsId">
       <c:select/>
     </f:entry>

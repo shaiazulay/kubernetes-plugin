@@ -23,6 +23,7 @@ import javax.annotation.CheckForNull;
 import javax.annotation.Nonnull;
 import javax.servlet.ServletException;
 
+import io.fabric8.kubernetes.api.model.*;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.lang.StringUtils;
 import org.kohsuke.stapler.DataBoundConstructor;
@@ -54,8 +55,6 @@ import hudson.slaves.Cloud;
 import hudson.slaves.NodeProvisioner;
 import hudson.util.FormValidation;
 import hudson.util.ListBoxModel;
-import io.fabric8.kubernetes.api.model.Pod;
-import io.fabric8.kubernetes.api.model.PodList;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientException;
 import jenkins.model.Jenkins;
@@ -93,6 +92,7 @@ public class KubernetesCloud extends Cloud {
     private boolean skipTlsVerify;
 
     private String namespace;
+    private String podsLimitResourceName;
     private String jenkinsUrl;
     @CheckForNull
     private String jenkinsTunnel;
@@ -127,6 +127,7 @@ public class KubernetesCloud extends Cloud {
         this.serverUrl = source.serverUrl;
         this.skipTlsVerify = source.skipTlsVerify;
         this.namespace = source.namespace;
+        this.podsLimitResourceName = source.podsLimitResourceName;
         this.jenkinsUrl = source.jenkinsUrl;
         this.credentialsId = source.credentialsId;
         this.containerCap = source.containerCap;
@@ -210,7 +211,15 @@ public class KubernetesCloud extends Cloud {
     public String getNamespace() {
         return namespace;
     }
+    @Nonnull
+    public String getPodsLimitQuotaName() {
+        return podsLimitResourceName;
+    }
 
+    @DataBoundSetter
+    public void setPodsLimitResourceName(@Nonnull String podsLimitResourceName) {
+        this.podsLimitResourceName = podsLimitResourceName;
+    }
     @DataBoundSetter
     public void setNamespace(@Nonnull String namespace) {
         Preconditions.checkArgument(!StringUtils.isBlank(namespace));
@@ -389,13 +398,6 @@ public class KubernetesCloud extends Cloud {
 
                     r.add(new NodeProvisioner.PlannedNode(t.getDisplayName(), Computer.threadPoolForRemoting
                                 .submit(new ProvisioningCallback(this, t, label)), 1));
-		     //copy fix from https://github.com/faraway/kubernetes-plugin/commit/364abb99ccb6defc539b90882d1854305e39d01a to new version 1.1.2
-                    LOGGER.log(Level.INFO, "Provisioning one node for " + t.getDisplayName() + ", taking a nap...");
-                    try {
-    			Thread.sleep(7000);                 //7000 milliseconds is seven seconds.
-		    } catch(InterruptedException ex) {
-   	                Thread.currentThread().interrupt();
-		    }
                 }
                 if (r.size() > 0) {
                     // Already found a matching template
@@ -436,7 +438,19 @@ public class KubernetesCloud extends Cloud {
         if (Strings.isNullOrEmpty(templateNamespace)) {
             templateNamespace = client.getNamespace();
         }
-
+        if (!Strings.isNullOrEmpty(getPodsLimitQuotaName())) {
+            ResourceQuota quota = client.resourceQuotas().inNamespace(templateNamespace).withName(getPodsLimitQuotaName()).get();
+            Quantity maxPodsHardQuota = quota.getSpec().getHard().get("pods");
+            Quantity maxPodsQuotaUsed = quota.getStatus().getUsed().get("pods");
+            LOGGER.log(Level.INFO, "shai-debug" + "quotaHard:" + maxPodsHardQuota.getAmount());
+            LOGGER.log(Level.INFO, "shai-debug" + "quotaUsed:" + maxPodsQuotaUsed.getAmount());
+            if (Integer.valueOf(maxPodsQuotaUsed.getAmount()) == Integer.valueOf(maxPodsHardQuota.getAmount())) {
+                LOGGER.log(Level.INFO,
+                        "Max pods quota: {0} reached in namespace: {1}",
+                        new Object[]{maxPodsQuotaUsed, templateNamespace});
+                return false;
+            }
+        }
         PodList slaveList = client.pods().inNamespace(templateNamespace).withLabels(getLabels()).list();
         List<Pod> slaveListItems = slaveList.getItems();
 
