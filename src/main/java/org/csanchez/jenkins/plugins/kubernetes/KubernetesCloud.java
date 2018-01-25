@@ -62,7 +62,7 @@ import jenkins.model.JenkinsLocationConfiguration;
 
 /**
  * Kubernetes cloud provider.
- *
+ * <p>
  * Starts agents in a Kubernetes cluster using defined Docker templates for each label.
  *
  * @author Carlos Sanchez carlos@apache.org
@@ -75,11 +75,15 @@ public class KubernetesCloud extends Cloud {
     private static final String DEFAULT_ID = "jenkins/slave-default";
 
     public static final String JNLP_NAME = "jnlp";
-    /** label for all pods started by the plugin */
+    /**
+     * label for all pods started by the plugin
+     */
     @Deprecated
     public static final Map<String, String> DEFAULT_POD_LABELS = ImmutableMap.of("jenkins", "slave");
 
-    /** Default timeout for idle workers that don't correctly indicate exit. */
+    /**
+     * Default timeout for idle workers that don't correctly indicate exit.
+     */
     private static final int DEFAULT_RETENTION_TIMEOUT_MINUTES = 5;
 
     private String defaultsProviderTemplate;
@@ -116,7 +120,8 @@ public class KubernetesCloud extends Cloud {
      * Copy constructor.
      * Allows to create copies of the original kubernetes cloud. Since it's a singleton
      * by design, this method also allows specifying a new name.
-     * @param name Name of the cloud to be created
+     *
+     * @param name   Name of the cloud to be created
      * @param source Source Kubernetes cloud implementation
      * @since 0.13
      */
@@ -137,7 +142,7 @@ public class KubernetesCloud extends Cloud {
 
     @Deprecated
     public KubernetesCloud(String name, List<? extends PodTemplate> templates, String serverUrl, String namespace,
-            String jenkinsUrl, String containerCapStr, int connectTimeout, int readTimeout, int retentionTimeout) {
+                           String jenkinsUrl, String containerCapStr, int connectTimeout, int readTimeout, int retentionTimeout) {
         this(name);
 
         setServerUrl(serverUrl);
@@ -211,6 +216,7 @@ public class KubernetesCloud extends Cloud {
     public String getNamespace() {
         return namespace;
     }
+
     @Nonnull
     public String getPodsLimitQuotaName() {
         return podsLimitResourceName;
@@ -220,6 +226,7 @@ public class KubernetesCloud extends Cloud {
     public void setPodsLimitResourceName(@Nonnull String podsLimitResourceName) {
         this.podsLimitResourceName = podsLimitResourceName;
     }
+
     @DataBoundSetter
     public void setNamespace(@Nonnull String namespace) {
         Preconditions.checkArgument(!StringUtils.isBlank(namespace));
@@ -233,7 +240,7 @@ public class KubernetesCloud extends Cloud {
 
     /**
      * Returns Jenkins URL to be used by agents launched by this cloud. Always ends with a trailing slash.
-     *
+     * <p>
      * Uses in order:
      * * cloud configuration
      * * environment variable <b>KUBERNETES_JENKINS_URL</b>
@@ -249,7 +256,7 @@ public class KubernetesCloud extends Cloud {
         String url = StringUtils.defaultIfBlank(
                 getJenkinsUrl(),
                 StringUtils.defaultIfBlank(
-                        System.getProperty("KUBERNETES_JENKINS_URL",System.getenv("KUBERNETES_JENKINS_URL")),
+                        System.getProperty("KUBERNETES_JENKINS_URL", System.getenv("KUBERNETES_JENKINS_URL")),
                         locationConfigurationUrl
                 )
         );
@@ -329,7 +336,7 @@ public class KubernetesCloud extends Cloud {
 
     @DataBoundSetter
     public void setMaxRequestsPerHostStr(String maxRequestsPerHostStr) {
-        try  {
+        try {
             this.maxRequestsPerHost = Integer.parseInt(maxRequestsPerHostStr);
         } catch (NumberFormatException e) {
             maxRequestsPerHost = DEFAULT_MAX_REQUESTS_PER_HOST;
@@ -349,15 +356,15 @@ public class KubernetesCloud extends Cloud {
      *
      * @return Kubernetes client.
      */
-    @SuppressFBWarnings({ "IS2_INCONSISTENT_SYNC", "DC_DOUBLECHECK" })
+    @SuppressFBWarnings({"IS2_INCONSISTENT_SYNC", "DC_DOUBLECHECK"})
     public KubernetesClient connect() throws UnrecoverableKeyException, NoSuchAlgorithmException, KeyStoreException,
             IOException, CertificateEncodingException {
 
         LOGGER.log(Level.FINE, "Building connection to Kubernetes {0} URL {1} namespace {2}",
-                new String[] { getDisplayName(), serverUrl, namespace });
+                new String[]{getDisplayName(), serverUrl, namespace});
         client = new KubernetesFactoryAdapter(serverUrl, namespace, serverCertificate, credentialsId, skipTlsVerify,
                 connectTimeout, readTimeout, maxRequestsPerHost).createClient();
-        LOGGER.log(Level.FINE, "Connected to Kubernetes {0} URL {1}", new String[] { getDisplayName(), serverUrl });
+        LOGGER.log(Level.FINE, "Connected to Kubernetes {0} URL {1}", new String[]{getDisplayName(), serverUrl});
         return client;
     }
 
@@ -369,10 +376,10 @@ public class KubernetesCloud extends Cloud {
     }
 
     Map<String, String> getLabelsMap(Set<LabelAtom> labelSet) {
-        ImmutableMap.Builder<String, String> builder = ImmutableMap.<String, String> builder();
+        ImmutableMap.Builder<String, String> builder = ImmutableMap.<String, String>builder();
         builder.putAll(getLabels());
         if (!labelSet.isEmpty()) {
-            for (LabelAtom label: labelSet) {
+            for (LabelAtom label : labelSet) {
                 builder.put(getIdForLabel(label), "true");
             }
         }
@@ -389,15 +396,15 @@ public class KubernetesCloud extends Cloud {
 
             ArrayList<PodTemplate> templates = getMatchingTemplates(label);
 
-            for (PodTemplate t: templates) {
+            for (PodTemplate t : templates) {
                 LOGGER.log(Level.INFO, "Template: " + t.getDisplayName());
-                for (int i = 1; i <= excessWorkload; i++) {
+                for (int i = 1; i <= excessWorkload && i <= getContainerCap(); i++) {
                     if (!addProvisionedSlave(t, label)) {
                         break;
                     }
 
                     r.add(new NodeProvisioner.PlannedNode(t.getDisplayName(), Computer.threadPoolForRemoting
-                                .submit(new ProvisioningCallback(this, t, label)), 1));
+                            .submit(new ProvisioningCallback(this, t, label)), 1));
                 }
                 if (r.size() > 0) {
                     // Already found a matching template
@@ -409,7 +416,7 @@ public class KubernetesCloud extends Cloud {
             Throwable cause = e.getCause();
             if (cause instanceof SocketTimeoutException || cause instanceof ConnectException || cause instanceof UnknownHostException) {
                 LOGGER.log(Level.WARNING, "Failed to connect to Kubernetes at {0}: {1}",
-                        new String[] { serverUrl, cause.getMessage() });
+                        new String[]{serverUrl, cause.getMessage()});
             } else {
                 LOGGER.log(Level.WARNING, "Failed to count the # of live instances on Kubernetes",
                         cause != null ? cause : e);
@@ -424,13 +431,11 @@ public class KubernetesCloud extends Cloud {
 
     /**
      * Check not too many already running.
-     *
      */
     private boolean addProvisionedSlave(@Nonnull PodTemplate template, @CheckForNull Label label) throws Exception {
         if (containerCap == 0) {
             return true;
         }
-
         KubernetesClient client = connect();
         String templateNamespace = template.getNamespace();
         // If template's namespace is not defined, take the
@@ -439,15 +444,14 @@ public class KubernetesCloud extends Cloud {
             templateNamespace = client.getNamespace();
         }
         if (!Strings.isNullOrEmpty(getPodsLimitQuotaName())) {
+
             ResourceQuota quota = client.resourceQuotas().inNamespace(templateNamespace).withName(getPodsLimitQuotaName()).get();
-            Quantity maxPodsHardQuota = quota.getSpec().getHard().get("pods");
-            Quantity maxPodsQuotaUsed = quota.getStatus().getUsed().get("pods");
-            LOGGER.log(Level.INFO, "shai-debug" + "quotaHard:" + maxPodsHardQuota.getAmount());
-            LOGGER.log(Level.INFO, "shai-debug" + "quotaUsed:" + maxPodsQuotaUsed.getAmount());
-            if (Integer.valueOf(maxPodsQuotaUsed.getAmount()) == Integer.valueOf(maxPodsHardQuota.getAmount())) {
+            int maxPodsHardQuota = Integer.valueOf(quota.getSpec().getHard().get("pods").getAmount());
+            int maxPodsQuotaUsed = Integer.valueOf(quota.getStatus().getUsed().get("pods").getAmount());
+            if (maxPodsQuotaUsed == maxPodsHardQuota) {
                 LOGGER.log(Level.INFO,
-                        "Max pods quota: {0} reached in namespace: {1}",
-                        new Object[]{maxPodsQuotaUsed, templateNamespace});
+                        "Max pods ResourceQuota: {0}, limit: {1} reached in namespace: {2}",
+                        new Object[]{getPodsLimitQuotaName(), maxPodsQuotaUsed, templateNamespace});
                 return false;
             }
         }
@@ -461,15 +465,15 @@ public class KubernetesCloud extends Cloud {
         if (slaveListItems != null && containerCap <= slaveListItems.size()) {
             LOGGER.log(Level.INFO,
                     "Total container cap of {0} reached, not provisioning: {1} running or errored in namespace {2}",
-                    new Object[] { containerCap, slaveListItems.size(), client.getNamespace() });
+                    new Object[]{containerCap, slaveListItems.size(), client.getNamespace()});
             return false;
         }
 
         if (namedListItems != null && slaveListItems != null && template.getInstanceCap() <= namedListItems.size()) {
             LOGGER.log(Level.INFO,
                     "Template instance cap of {0} reached for template {1}, not provisioning: {2} running or errored in namespace {3} with label {4}",
-                    new Object[] { template.getInstanceCap(), template.getName(), slaveListItems.size(),
-                            client.getNamespace(), label == null ? "" : label.toString() });
+                    new Object[]{template.getInstanceCap(), template.getName(), slaveListItems.size(),
+                            client.getNamespace(), label == null ? "" : label.toString()});
             return false; // maxed out
         }
         return true;
@@ -482,6 +486,7 @@ public class KubernetesCloud extends Cloud {
 
     /**
      * Gets {@link PodTemplate} that has the matching {@link Label}.
+     *
      * @param label label to look for in templates
      * @return the template
      */
@@ -491,6 +496,7 @@ public class KubernetesCloud extends Cloud {
 
     /**
      * Gets all PodTemplates that have the matching {@link Label}.
+     *
      * @param label label to look for in templates
      * @return list of matching templates
      */
@@ -506,6 +512,7 @@ public class KubernetesCloud extends Cloud {
 
     /**
      * Add a new template to the cloud
+     *
      * @param t docker template
      */
     public void addTemplate(PodTemplate t) {
@@ -571,7 +578,7 @@ public class KubernetesCloud extends Cloud {
                                     Jenkins.getInstance(),
                                     ACL.SYSTEM,
                                     serverUrl != null ? URIRequirementBuilder.fromUri(serverUrl).build()
-                                                      : Collections.EMPTY_LIST
+                                            : Collections.EMPTY_LIST
                             ));
 
         }

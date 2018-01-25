@@ -22,7 +22,7 @@
     </f:entry>
 
     <f:entry title="${%Pods limit resource quota name}" field="podsLimitResourceName">
-       <f:textbox/>
+       <f:textbox default="podtemplatequota"/>
     </f:entry>
 
     <f:entry title="${%Credentials}" field="credentialsId">
